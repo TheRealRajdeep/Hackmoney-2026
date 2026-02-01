@@ -17,18 +17,20 @@ const FOLLOWED_CHANNELS = [
   { emoji: "👊", name: "Channel 5", game: "Category B", viewers: "—" },
 ];
 
-const LIVE_CHANNELS = [
-  { emoji: "🎪", name: "Live 1", game: "Category A", viewers: "—" },
-  { emoji: "⚡", name: "Live 2", game: "Category B", viewers: "—" },
-  { emoji: "🌟", name: "Live 3", game: "Category A", viewers: "—" },
-  { emoji: "🔥", name: "Live 4", game: "Category C", viewers: "—" },
-  { emoji: "💎", name: "Live 5", game: "Category B", viewers: "—" },
+// Placeholder ongoing predictions – replace with real data from backend
+const ONGOING_PREDICTIONS = [
+  { emoji: "🎪", name: "Prediction 1", channelName: "Channel A", prices: "0.42/0.58" },
+  { emoji: "⚡", name: "Prediction 2", channelName: "Channel B", prices: "0.65/0.35" },
+  { emoji: "🌟", name: "Prediction 3", channelName: "Channel A", prices: "0.28/0.72" },
+  { emoji: "🔥", name: "Prediction 4", channelName: "Channel C", prices: "0.51/0.49" },
+  { emoji: "💎", name: "Prediction 5", channelName: "Channel B", prices: "0.33/0.67" },
 ];
 
 export default function Sidebar() {
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex" aria-label="Sidebar">
-      <div className="flex flex-col gap-4 overflow-y-auto py-4">
+    <aside className="hidden h-full min-h-0 w-60 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 lg:flex" aria-label="Sidebar">
+      <div className="min-h-0 flex-1 overflow-y-auto py-4">
+        <div className="flex flex-col gap-4">
         <div className="px-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-white">For You</h2>
@@ -65,26 +67,27 @@ export default function Sidebar() {
         </div>
 
         <div className="px-2">
-          <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Live Channels</h3>
+          <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Ongoing Predictions</h3>
           <ul className="space-y-0.5" role="list">
-            {LIVE_CHANNELS.map((ch, i) => (
+            {ONGOING_PREDICTIONS.map((pred, i) => (
               <li key={i}>
                 <button
                   type="button"
                   className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-zinc-800"
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-base" aria-hidden>
-                    {ch.emoji}
+                    {pred.emoji}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-white">{ch.name}</span>
-                    <span className="block truncate text-xs text-zinc-500">{ch.game}</span>
+                    <span className="block truncate text-sm font-medium text-white">{pred.name}</span>
+                    <span className="block truncate text-xs text-zinc-500">{pred.channelName}</span>
                   </div>
-                  <span className="shrink-0 text-xs text-zinc-500">{ch.viewers}</span>
+                  <span className="shrink-0 text-xs text-zinc-500">{pred.prices}</span>
                 </button>
               </li>
             ))}
           </ul>
+        </div>
         </div>
       </div>
     </aside>

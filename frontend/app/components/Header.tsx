@@ -50,7 +50,7 @@ export default function Header() {
       <div className="flex h-14 items-center gap-3 px-4 sm:gap-4">
         {/* Logo */}
         <button type="button" className="flex shrink-0 items-center gap-1 rounded p-1 text-white hover:bg-zinc-800" aria-label="Home">
-          <span className="text-xl font-bold tracking-tight">Yellow</span>
+          <span className="font-logo text-xl font-semibold tracking-tight">📺 Prophit</span>
         </button>
 
         {/* Nav */}

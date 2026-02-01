@@ -35,11 +35,11 @@ function EyeIcon() {
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 font-sans text-zinc-100">
+    <div className="flex h-screen flex-col overflow-hidden bg-zinc-950 font-sans text-zinc-100">
       <Header />
-      <div className="flex flex-1">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-auto">
+        <main className="min-h-0 flex-1 overflow-auto">
           <div className="mx-auto max-w-6xl px-4 py-6">
             {/* Top row: back + For You */}
             <div className="mb-4 flex items-center gap-2">
@@ -53,7 +53,7 @@ export default function Home() {
 
             {/* Featured stream – placeholder cover only */}
             <section className="mb-8" aria-label="Featured stream">
-              <div className="relative overflow-hidden rounded-lg">
+              <div className="relative mx-auto w-full max-w-[50%] overflow-hidden rounded-lg">
                 <PlaceholderCover aspect="video" className="rounded-lg" />
                 <span className="absolute left-4 top-4 rounded bg-red-600 px-2 py-1 text-xs font-semibold uppercase text-white">
                   Live
