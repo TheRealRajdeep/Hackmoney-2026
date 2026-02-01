@@ -2,6 +2,7 @@
 
 import { Client as YellowClient } from "yellow-ts";
 import type { Address, Hash, Hex, PublicClient, WalletClient } from "viem";
+import { getAddress } from "viem";
 import { parseUnits } from "viem";
 import {
   Allocation,
@@ -203,20 +204,22 @@ class BrowserWalletStateSigner {
   }
 
   async signState(channelId: Hex, state: any): Promise<Hex> {
-    // Import getPackedState dynamically to avoid circular dependencies
-    const { getPackedState } = await import("@erc7824/nitrolite/dist/utils/state.js");
+    const { getPackedState, getStateHash } = await import("@erc7824/nitrolite/dist/utils/state.js");
     const packedState = getPackedState(channelId, state);
+    const stateHash = getStateHash(channelId, state);
 
     logFlow("📝 signing state", {
       channelId,
       packedStateLength: (packedState.length - 2) / 2,
+      stateHashLen: (stateHash.length - 2) / 2,
     });
 
-    // Use walletClient.signMessage with raw bytes
-    logFlow("🔑 using walletClient.signMessage");
+    // Nitrolite verifySignature uses recoverMessageAddress({ raw: stateHash }) = EIP-191 recovery.
+    // Sign the 32-byte state hash so our signature verifies the same way on-chain.
+    logFlow("🔑 using walletClient.signMessage (state hash for EIP-191)");
     const sig = await this.walletClient.signMessage({
       account: this.walletClient.account!,
-      message: { raw: packedState },
+      message: { raw: stateHash },
     });
     return normalizeSignatureHex(sig);
   }
@@ -686,6 +689,15 @@ export async function getExistingYellowChannels(
   return channels;
 }
 
+/**
+ * Yellow Network deposit flow (per https://docs.yellow.org/docs/guides/migration-guide/):
+ * 1. Ask user for deposit amount (caller provides amountUsdc).
+ * 2. Authenticate with session key (application, allowances, expires_at).
+ * 3. Create channel with zero balance (create_channel has no amount; fund via resize).
+ * 4. Deposit USDC to custody on-chain.
+ * 5. Resize: move from custody to channel (resize_amount > 0) and allocate to unified
+ *    (allocate_amount < 0) in one operation.
+ */
 export async function runYellowDepositFlow(
   input: DepositFlowInput,
   onStep?: (s: DepositFlowStep) => void,
@@ -1032,12 +1044,32 @@ export async function runYellowDepositFlow(
       try {
         const serverSignature = (createChannelResponse as any).params.serverSignature as Hex;
         const channel = (createChannelResponse as any).params.channel;
+        const rawAllocations = (createChannelResponse as any).params.state.allocations as Array<{
+          destination: string;
+          token: string;
+          amount: string | number | bigint;
+        }>;
+        // Normalize types only: BigInt amounts, Hex data, checksummed addresses. Do NOT reorder participants/allocations
+        // (reordering would change channelId and invalidate the server's signature).
         const unsignedState = {
           intent: (createChannelResponse as any).params.state.intent as StateIntent,
-          version: BigInt((createChannelResponse as any).params.state.version),
-          data: (createChannelResponse as any).params.state.stateData as Hex,
-          allocations: (createChannelResponse as any).params.state.allocations as Allocation[],
+          version: BigInt(Number((createChannelResponse as any).params.state.version)),
+          data: ((createChannelResponse as any).params.state.stateData as Hex) || "0x",
+          allocations: rawAllocations.map((a) => ({
+            destination: getAddress(a.destination),
+            token: getAddress(a.token),
+            amount: typeof a.amount === "bigint" ? a.amount : BigInt(String(a.amount)),
+          })) as Allocation[],
         };
+        // Nitrolite puts sigs as [localUserSig, serverSig] and assumes participants[0] is the local user.
+        // If Yellow returns [server, user], signature verification will fail with InvalidStateSignatures.
+        const firstParticipant = (channel.participants?.[0] as string) ?? "";
+        if (firstParticipant && getAddress(firstParticipant) !== getAddress(walletAddress)) {
+          throw new Error(
+            `CreateChannel: Yellow returned participants with server first (${firstParticipant}), but Nitrolite expects the wallet (${walletAddress}) as participants[0]. ` +
+              "Signature order would be wrong and the contract would revert with InvalidStateSignatures. Please ensure Yellow Network returns participants in [user, server] order."
+          );
+        }
         logFlow("📋 channel params received from Yellow", {
           participants: channel.participants,
           nonce: channel.nonce,
