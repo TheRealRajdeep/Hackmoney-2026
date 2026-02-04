@@ -69,3 +69,16 @@ export function getTransferTokensForChain(chainId: number): typeof TRANSFER_TOKE
   if (!byChain) return [];
   return TRANSFER_TOKENS.filter((t) => t.id in byChain);
 }
+
+// --- ENS (Ethereum Name Service) on Sepolia ---
+/** Parent domain for Prophit usernames: subdomains are {username}.prophit.eth */
+export const ENS_PARENT_DOMAIN = "prophit.eth";
+
+/** ENS Name Wrapper contract on Sepolia (for creating subdomains). */
+export const ENS_NAME_WRAPPER_SEPOLIA = "0x0635513f179D50A207757E05759CbD106d7dFcE8" as const;
+
+/** ENS Public Resolver on Sepolia (used for new subdomain records). */
+export const ENS_PUBLIC_RESOLVER_SEPOLIA = "0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5" as const;
+
+/** Subdomain label rules: 3–63 chars, lowercase letters, numbers, hyphens only. */
+export const ENS_SUBDOMAIN_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$/;

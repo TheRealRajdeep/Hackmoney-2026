@@ -1,5 +1,6 @@
 "use client";
 
+import { EnsUsernameGate } from "@/app/components/EnsUsernameGate";
 import { PrivyProvider, useCreateWallet, usePrivy, useWallets } from "@privy-io/react-auth";
 import { useEffect, useRef } from "react";
 
@@ -74,6 +75,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       }}
     >
       <EmbeddedWalletBootstrapper />
+      <EnsUsernameGate />
       {children}
     </PrivyProvider>
   );

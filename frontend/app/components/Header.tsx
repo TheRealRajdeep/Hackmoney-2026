@@ -1,9 +1,12 @@
 "use client";
 
 import { usePrivy } from "@privy-io/react-auth";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { DepositModal } from "./DepositModal";
+import { getEnsUsernameForAddress } from "./SetUsernameModal";
+import { useEnsName, ensNameToUsername } from "@/lib/hooks/useEnsName";
 import { usePlatformBalance } from "@/lib/hooks/usePlatformBalance";
+import { usePlatformWallet } from "@/lib/hooks/usePlatformWallet";
 
 function truncateAddress(address: string) {
   if (address.length <= 10) return address;
@@ -44,42 +47,42 @@ function BellIcon() {
   );
 }
 
-function ChevronDownIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
-
-function WalletIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect width="20" height="14" x="2" y="5" rx="2" />
-      <path d="M2 10h20" />
-      <path d="M12 15a2 2 0 0 0 2-2 2 2 0 0 0-2-2" />
-    </svg>
-  );
-}
-
 export default function Header() {
   const { ready, authenticated, user, login, logout } = usePrivy();
+  const { platformAddress } = usePlatformWallet();
   const { usdcBalance, loading, refetch: refetchBalance } = usePlatformBalance();
   const walletAddress = user?.wallet?.address as string | undefined;
-  const [walletDropdownOpen, setWalletDropdownOpen] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
-  const walletDropdownRef = useRef<HTMLDivElement>(null);
+  const [storedDisplayName, setStoredDisplayName] = useState<string | null>(null);
+
+  const addressForDisplay = platformAddress ?? walletAddress ?? null;
+  const ensNameFromChain = useEnsName(addressForDisplay);
 
   useEffect(() => {
-    if (!walletDropdownOpen) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (walletDropdownRef.current && !walletDropdownRef.current.contains(e.target as Node)) {
-        setWalletDropdownOpen(false);
-      }
+    if (!addressForDisplay) {
+      setStoredDisplayName(null);
+      return;
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [walletDropdownOpen]);
+    setStoredDisplayName(getEnsUsernameForAddress(addressForDisplay));
+  }, [addressForDisplay]);
+
+  useEffect(() => {
+    if (!addressForDisplay) return;
+    const handler = (e: CustomEvent<{ address: string }>) => {
+      if (e.detail?.address === addressForDisplay.toLowerCase()) {
+        setStoredDisplayName(getEnsUsernameForAddress(addressForDisplay));
+      }
+    };
+    window.addEventListener("prophit-ens-registered", handler as EventListener);
+    return () => window.removeEventListener("prophit-ens-registered", handler as EventListener);
+  }, [addressForDisplay]);
+
+  const displayName =
+    addressForDisplay == null
+      ? null
+      : storedDisplayName ??
+      (ensNameFromChain ? ensNameToUsername(ensNameFromChain) : null) ??
+      truncateAddress(addressForDisplay);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border-default bg-bg-surface/95 backdrop-blur-sm">
@@ -132,8 +135,14 @@ export default function Header() {
                 </button>
               ) : (
                 <>
-                  {walletAddress && (
+                  {addressForDisplay && (
                     <>
+                      <span
+                        className="rounded bg-bg-elevated px-3 py-1.5 font-mono text-xs text-zinc-300 ring-1 ring-border-subtle"
+                        title={addressForDisplay}
+                      >
+                        {displayName}
+                      </span>
                       <button
                         type="button"
                         onClick={() => setDepositModalOpen(true)}
@@ -141,47 +150,6 @@ export default function Header() {
                       >
                         {loading ? "—" : `$${usdcBalance}`} <span className="text-text-muted">·</span> Deposit
                       </button>
-                      <div className="relative" ref={walletDropdownRef}>
-                        <button
-                          type="button"
-                          onClick={() => setWalletDropdownOpen((o) => !o)}
-                          className="flex items-center gap-1.5 rounded bg-bg-elevated px-3 py-1.5 font-mono text-xs text-zinc-300 ring-1 ring-border-subtle hover:bg-bg-card hover:text-accent-cyan transition-colors"
-                          title={walletAddress}
-                          aria-expanded={walletDropdownOpen}
-                          aria-haspopup="true"
-                        >
-                          <WalletIcon />
-                          {truncateAddress(walletAddress)}
-                          <ChevronDownIcon />
-                        </button>
-                        {walletDropdownOpen && (
-                          <div
-                            className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border border-border-default bg-bg-card py-1 shadow-xl"
-                            role="menu"
-                          >
-                            <div className="px-3 py-2">
-                              <p className="text-xs text-text-muted">Main wallet</p>
-                              <p className="truncate font-mono text-sm text-accent-cyan" title={walletAddress}>
-                                {truncateAddress(walletAddress)}
-                              </p>
-                            </div>
-                            <div className="border-t border-border-subtle px-3 py-2">
-                              <p className="text-xs text-text-muted">Prophit balance (for predictions)</p>
-                              <p className="text-sm font-medium text-white">{loading ? "—" : `$${usdcBalance}`}</p>
-                            </div>
-                            <button
-                              type="button"
-                              className="w-full px-3 py-2 text-left text-sm text-white hover:bg-bg-elevated"
-                              onClick={() => {
-                                setWalletDropdownOpen(false);
-                                setDepositModalOpen(true);
-                              }}
-                            >
-                              Deposit to Prophit wallet
-                            </button>
-                          </div>
-                        )}
-                      </div>
                     </>
                   )}
                   <button
