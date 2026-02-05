@@ -3,6 +3,7 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { useCallback, useEffect, useState } from "react";
 import { ENS_PARENT_DOMAIN, ENS_SUBDOMAIN_LABEL_REGEX } from "@/lib/constants";
+import { apiUserUrl } from "@/lib/api";
 
 function CloseIcon() {
   return (
@@ -12,41 +13,33 @@ function CloseIcon() {
   );
 }
 
-const STORAGE_KEY_PREFIX = "prophit_ens_";
-const STORAGE_USERNAME_PREFIX = "prophit_ens_username_";
-
-function getStorageKey(address: string) {
-  return `${STORAGE_KEY_PREFIX}${address.toLowerCase()}`;
-}
-
-function getUsernameStorageKey(address: string) {
-  return `${STORAGE_USERNAME_PREFIX}${address.toLowerCase()}`;
-}
-
 export type EnsModalStatus = "registered" | "skipped" | null;
 
-export function getEnsStatusForAddress(address: string | null): EnsModalStatus {
+/** Fetch ENS modal status from DB: no user → null, user with ensDomain → "registered", user without → "skipped". */
+export async function fetchEnsStatusForAddress(address: string | null): Promise<EnsModalStatus> {
   if (typeof window === "undefined" || !address) return null;
-  const raw = localStorage.getItem(getStorageKey(address));
-  if (raw === "registered" || raw === "skipped") return raw;
-  return null;
+  try {
+    const res = await fetch(apiUserUrl(address));
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    const user = await res.json();
+    return user.ensDomain ? "registered" : "skipped";
+  } catch {
+    return null;
+  }
 }
 
-export function setEnsStatusForAddress(address: string, status: "registered" | "skipped") {
-  localStorage.setItem(getStorageKey(address), status);
-}
-
-/** ENS username (subdomain label) for display, e.g. "alice" from alice.prophit.eth */
-export function getEnsUsernameForAddress(address: string | null): string | null {
+/** Fetch ENS username (subdomain label) from DB for display, e.g. "alice" from alice.prophit.eth */
+export async function fetchEnsUsernameForAddress(address: string | null): Promise<string | null> {
   if (typeof window === "undefined" || !address) return null;
-  return localStorage.getItem(getUsernameStorageKey(address));
-}
-
-export function setEnsUsernameForAddress(address: string, username: string) {
-  localStorage.setItem(getUsernameStorageKey(address), username);
-  window.dispatchEvent(
-    new CustomEvent("prophit-ens-registered", { detail: { address: address.toLowerCase() } })
-  );
+  try {
+    const res = await fetch(apiUserUrl(address));
+    if (!res.ok) return null;
+    const user = await res.json();
+    return user.ensDomain ?? null;
+  } catch {
+    return null;
+  }
 }
 
 interface SetUsernameModalProps {
@@ -62,7 +55,7 @@ export function SetUsernameModal({
   platformAddress,
   onRegistered,
 }: SetUsernameModalProps) {
-  const { getAccessToken } = usePrivy();
+  const { getAccessToken, user } = usePrivy();
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -95,8 +88,22 @@ export function SetUsernameModal({
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ensName) {
         setSuccess(data.ensName);
-        setEnsStatusForAddress(platformAddress, "registered");
-        setEnsUsernameForAddress(platformAddress, normalized);
+        const token = await getAccessToken();
+        await fetch(apiUserUrl(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          body: JSON.stringify({
+            metamaskAddress: platformAddress,
+            privyAddress: user?.id ?? platformAddress,
+            ensDomain: normalized,
+          }),
+        });
+        window.dispatchEvent(
+          new CustomEvent("prophit-ens-registered", { detail: { address: platformAddress.toLowerCase() } })
+        );
         onRegistered?.(data.ensName);
         setTimeout(() => {
           onClose();
@@ -112,10 +119,28 @@ export function SetUsernameModal({
     }
   }, [platformAddress, getAccessToken, isValid, normalized, onRegistered, onClose]);
 
-  const handleSkip = useCallback(() => {
-    if (platformAddress) setEnsStatusForAddress(platformAddress, "skipped");
+  const handleSkip = useCallback(async () => {
+    if (platformAddress && getAccessToken && user) {
+      try {
+        const token = await getAccessToken();
+        await fetch(apiUserUrl(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          body: JSON.stringify({
+            metamaskAddress: platformAddress,
+            privyAddress: user.id ?? platformAddress,
+            ensDomain: null,
+          }),
+        });
+      } catch {
+        // non-blocking
+      }
+    }
     onClose();
-  }, [platformAddress, onClose]);
+  }, [platformAddress, getAccessToken, user, onClose]);
 
   useEffect(() => {
     if (open) {

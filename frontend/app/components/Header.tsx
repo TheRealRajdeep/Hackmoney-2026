@@ -3,7 +3,7 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { useEffect, useState } from "react";
 import { DepositModal } from "./DepositModal";
-import { getEnsUsernameForAddress } from "./SetUsernameModal";
+import { fetchEnsUsernameForAddress } from "./SetUsernameModal";
 import { useEnsName, ensNameToUsername } from "@/lib/hooks/useEnsName";
 import { usePlatformBalance } from "@/lib/hooks/usePlatformBalance";
 import { usePlatformWallet } from "@/lib/hooks/usePlatformWallet";
@@ -63,14 +63,20 @@ export default function Header() {
       setStoredDisplayName(null);
       return;
     }
-    setStoredDisplayName(getEnsUsernameForAddress(addressForDisplay));
+    let cancelled = false;
+    fetchEnsUsernameForAddress(addressForDisplay).then((name) => {
+      if (!cancelled) setStoredDisplayName(name);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [addressForDisplay]);
 
   useEffect(() => {
     if (!addressForDisplay) return;
     const handler = (e: CustomEvent<{ address: string }>) => {
       if (e.detail?.address === addressForDisplay.toLowerCase()) {
-        setStoredDisplayName(getEnsUsernameForAddress(addressForDisplay));
+        fetchEnsUsernameForAddress(addressForDisplay).then(setStoredDisplayName);
       }
     };
     window.addEventListener("prophit-ens-registered", handler as EventListener);

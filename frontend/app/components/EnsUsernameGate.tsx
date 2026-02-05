@@ -2,27 +2,31 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePlatformWallet } from "@/lib/hooks/usePlatformWallet";
-import {
-  getEnsStatusForAddress,
-  SetUsernameModal,
-  setEnsStatusForAddress,
-} from "./SetUsernameModal";
+import { fetchEnsStatusForAddress, SetUsernameModal } from "./SetUsernameModal";
 
 /**
  * When the user has an embedded wallet and has not yet set or skipped their
- * ENS username, show the SetUsernameModal. Renders nothing itself; only the modal.
+ * ENS username (in DB), show the SetUsernameModal. Renders nothing itself; only the modal.
  */
 export function EnsUsernameGate() {
   const { platformAddress } = usePlatformWallet();
   const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (
-      platformAddress &&
-      getEnsStatusForAddress(platformAddress) === null
-    ) {
-      setShowModal(true);
+    if (!platformAddress) {
+      setLoading(false);
+      return;
     }
+    let cancelled = false;
+    setLoading(true);
+    fetchEnsStatusForAddress(platformAddress).then((status) => {
+      if (!cancelled && status === null) setShowModal(true);
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [platformAddress]);
 
   const handleClose = useCallback(() => {
@@ -30,8 +34,8 @@ export function EnsUsernameGate() {
   }, []);
 
   const handleRegistered = useCallback(() => {
-    if (platformAddress) setEnsStatusForAddress(platformAddress, "registered");
-  }, [platformAddress]);
+    setShowModal(false);
+  }, []);
 
   if (!showModal || !platformAddress) return null;
 
