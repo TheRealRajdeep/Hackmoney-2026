@@ -83,5 +83,8 @@ export const ENS_NAME_WRAPPER_SEPOLIA = "0x0635513f179D50A207757E05759CbD106d7dF
 /** ENS Public Resolver on Sepolia (used for new subdomain records). */
 export const ENS_PUBLIC_RESOLVER_SEPOLIA = "0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5" as const;
 
+/** ENS Reverse Registrar on Sepolia (for setting primary name / reverse record). */
+export const ENS_REVERSE_REGISTRAR_SEPOLIA = "0xA0a1AbcDAe1a2a4A2EF8e9113Ff0e02DD81DC0C6" as const;
+
 /** Subdomain label rules: 3–63 chars, lowercase letters, numbers, hyphens only. */
 export const ENS_SUBDOMAIN_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]{1,61}[a-z0-9])?$/;

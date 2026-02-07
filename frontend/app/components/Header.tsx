@@ -53,19 +53,19 @@ export default function Header() {
   const { usdcBalance, loading, refetch: refetchBalance } = usePlatformBalance();
   const walletAddress = user?.wallet?.address as string | undefined;
   const [depositModalOpen, setDepositModalOpen] = useState(false);
-  const [storedDisplayName, setStoredDisplayName] = useState<string | null>(null);
 
   const addressForDisplay = platformAddress ?? walletAddress ?? null;
-  const ensNameFromChain = useEnsName(addressForDisplay);
+  const { ensName } = useEnsName(addressForDisplay);
+  const [storedUsername, setStoredUsername] = useState<string | null>(null);
 
   useEffect(() => {
     if (!addressForDisplay) {
-      setStoredDisplayName(null);
+      setStoredUsername(null);
       return;
     }
     let cancelled = false;
     fetchEnsUsernameForAddress(addressForDisplay).then((name) => {
-      if (!cancelled) setStoredDisplayName(name);
+      if (!cancelled) setStoredUsername(name);
     });
     return () => {
       cancelled = true;
@@ -74,21 +74,22 @@ export default function Header() {
 
   useEffect(() => {
     if (!addressForDisplay) return;
-    const handler = (e: CustomEvent<{ address: string }>) => {
-      if (e.detail?.address === addressForDisplay.toLowerCase()) {
-        fetchEnsUsernameForAddress(addressForDisplay).then(setStoredDisplayName);
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ address: string }>).detail;
+      if (detail?.address === addressForDisplay.toLowerCase()) {
+        fetchEnsUsernameForAddress(addressForDisplay).then(setStoredUsername);
       }
     };
-    window.addEventListener("prophit-ens-registered", handler as EventListener);
-    return () => window.removeEventListener("prophit-ens-registered", handler as EventListener);
+    window.addEventListener("prophit-ens-registered", handler);
+    return () => window.removeEventListener("prophit-ens-registered", handler);
   }, [addressForDisplay]);
 
   const displayName =
     addressForDisplay == null
       ? null
-      : storedDisplayName ??
-      (ensNameFromChain ? ensNameToUsername(ensNameFromChain) : null) ??
-      truncateAddress(addressForDisplay);
+      : (ensName ? ensNameToUsername(ensName) : null) ??
+        storedUsername ??
+        truncateAddress(addressForDisplay);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border-default bg-bg-surface/95 backdrop-blur-sm">

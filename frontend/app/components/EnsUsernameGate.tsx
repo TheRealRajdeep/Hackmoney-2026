@@ -7,43 +7,39 @@ import { useEnsName } from "@/lib/hooks/useEnsName";
 import { fetchEnsStatusForAddress, SetUsernameModal } from "./SetUsernameModal";
 
 /**
- * When the user connects their wallet: if they have an ENS username (on-chain or in DB),
- * we use it for display. If they don't have one, show the SetUsernameModal to prompt
- * them to create one. Uses the same address as the header (platform ?? connected wallet).
+ * When the user connects their wallet: if they have an ENS username (on-chain reverse record)
+ * or registered in DB (fallback for users before reverse record was set), we use it.
+ * If they have neither, show the SetUsernameModal.
  */
 export function EnsUsernameGate() {
   const { user } = usePrivy();
   const { platformAddress } = usePlatformWallet();
-  console.log("platformAddress", platformAddress);
   const walletAddress = user?.wallet?.address as string | null | undefined;
   const addressForGate = platformAddress ?? walletAddress ?? null;
-  const ensNameOnChain = useEnsName(addressForGate);
+  const { ensName, isLoading } = useEnsName(addressForGate);
   const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [hasUsernameInDb, setHasUsernameInDb] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!addressForGate) {
-      setLoading(false);
-      return;
-    }
-    // If they already have an ENS name on-chain, no need to prompt
-    if (ensNameOnChain) {
-      console.log("ensNameOnChain", ensNameOnChain);
-      setShowModal(false);
-      setLoading(false);
+      setHasUsernameInDb(null);
       return;
     }
     let cancelled = false;
-    setLoading(true);
     fetchEnsStatusForAddress(addressForGate).then((status) => {
-      // Show modal when: no user in DB (null) and no ENS on chain
-      if (!cancelled && status === null) setShowModal(true);
-      if (!cancelled) setLoading(false);
+      if (!cancelled) setHasUsernameInDb(status === "registered");
     });
     return () => {
       cancelled = true;
     };
-  }, [addressForGate, ensNameOnChain]);
+  }, [addressForGate]);
+
+  useEffect(() => {
+    if (!addressForGate || isLoading) return;
+    // Show modal only when: no ENS name on-chain AND (DB check not done yet OR no username in DB)
+    const hasUsername = ensName || (hasUsernameInDb === true);
+    setShowModal(!hasUsername);
+  }, [addressForGate, ensName, isLoading, hasUsernameInDb]);
 
   const handleClose = useCallback(() => {
     setShowModal(false);

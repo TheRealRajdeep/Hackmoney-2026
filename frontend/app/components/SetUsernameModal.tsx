@@ -1,10 +1,23 @@
 "use client";
 
 import { usePrivy } from "@privy-io/react-auth";
+import { useWallets } from "@privy-io/react-auth";
 import { useCallback, useEffect, useState } from "react";
-import { ENS_PARENT_DOMAIN, ENS_SUBDOMAIN_LABEL_REGEX } from "@/lib/constants";
+import { createWalletClient, custom, getContract, type Address } from "viem";
+import { sepolia } from "viem/chains";
+import { ENS_PARENT_DOMAIN, ENS_REVERSE_REGISTRAR_SEPOLIA, ENS_SUBDOMAIN_LABEL_REGEX } from "@/lib/constants";
 import { usePlatformWallet } from "@/lib/hooks/usePlatformWallet";
 import { apiUserUrl } from "@/lib/api";
+
+const REVERSE_REGISTRAR_ABI = [
+  {
+    inputs: [{ name: "name", type: "string" }],
+    name: "setName",
+    outputs: [{ name: "", type: "bytes32" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
 
 function CloseIcon() {
   return (
@@ -57,6 +70,7 @@ export function SetUsernameModal({
   onRegistered,
 }: SetUsernameModalProps) {
   const { getAccessToken } = usePrivy();
+  const { wallets } = useWallets();
   const { metamaskAddress } = usePlatformWallet();
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -89,13 +103,16 @@ export function SetUsernameModal({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ensName) {
-        setSuccess(data.ensName);
-        const token = await getAccessToken();
+        const ensName = data.ensName as string;
+        setSuccess(ensName);
+
+        // Save to DB
+        const token2 = await getAccessToken();
         await fetch(apiUserUrl(), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(token && { Authorization: `Bearer ${token}` }),
+            ...(token2 && { Authorization: `Bearer ${token2}` }),
           },
           body: JSON.stringify({
             metamaskAddress: metamaskAddress ?? platformAddress,
@@ -103,10 +120,41 @@ export function SetUsernameModal({
             ensDomain: normalized,
           }),
         });
+
+        // Set reverse record (primary name) so getEnsName works. User must sign.
+        const targetAddr = platformAddress.toLowerCase();
+        const wallet = (wallets ?? []).find(
+          (w) => (w as { address?: string }).address?.toLowerCase() === targetAddr
+        );
+        if (wallet && typeof (wallet as { getEthereumProvider?: () => Promise<unknown> }).getEthereumProvider === "function") {
+          try {
+            const w = wallet as { getEthereumProvider: () => Promise<unknown>; address: string; switchChain?: (chainId: number) => Promise<void> };
+            if (typeof w.switchChain === "function") {
+              await w.switchChain(sepolia.id);
+            }
+            const provider = await w.getEthereumProvider();
+            if (provider) {
+              const walletClient = createWalletClient({
+                transport: custom(provider as { request(...args: unknown[]): Promise<unknown> }),
+                chain: sepolia,
+                account: platformAddress as Address,
+              });
+              const reverseRegistrar = getContract({
+                address: ENS_REVERSE_REGISTRAR_SEPOLIA as Address,
+                abi: REVERSE_REGISTRAR_ABI,
+                client: walletClient,
+              });
+              await reverseRegistrar.write.setName([ensName]);
+            }
+          } catch {
+            // User may have declined; reverse record not set. DB fallback will work.
+          }
+        }
+
         window.dispatchEvent(
           new CustomEvent("prophit-ens-registered", { detail: { address: platformAddress.toLowerCase() } })
         );
-        onRegistered?.(data.ensName);
+        onRegistered?.(ensName);
         setTimeout(() => {
           onClose();
         }, 1500);
@@ -119,7 +167,7 @@ export function SetUsernameModal({
     } finally {
       setLoading(false);
     }
-  }, [platformAddress, metamaskAddress, getAccessToken, isValid, normalized, onRegistered, onClose]);
+  }, [platformAddress, metamaskAddress, getAccessToken, isValid, normalized, onRegistered, onClose, wallets]);
 
   useEffect(() => {
     if (open) {
