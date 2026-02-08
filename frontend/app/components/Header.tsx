@@ -1,8 +1,9 @@
 "use client";
 
 import { usePrivy } from "@privy-io/react-auth";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DepositModal } from "./DepositModal";
+import { WithdrawModal } from "./WithdrawModal";
 import { fetchEnsUsernameForAddress } from "./SetUsernameModal";
 import { useEnsName, ensNameToUsername } from "@/lib/hooks/useEnsName";
 import { usePlatformBalance } from "@/lib/hooks/usePlatformBalance";
@@ -53,6 +54,9 @@ export default function Header() {
   const { totalUsdBalance, loading, refetch: refetchBalance } = usePlatformBalance();
   const walletAddress = user?.wallet?.address as string | undefined;
   const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
+  const [usernameDropdownOpen, setUsernameDropdownOpen] = useState(false);
+  const usernameDropdownRef = useRef<HTMLDivElement>(null);
 
   const addressForDisplay = platformAddress ?? walletAddress ?? null;
   const { ensName } = useEnsName(embeddedWalletAddress ?? null);
@@ -85,6 +89,18 @@ export default function Header() {
     window.addEventListener("prophit-ens-registered", handler);
     return () => window.removeEventListener("prophit-ens-registered", handler);
   }, [addressForEns]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (usernameDropdownRef.current && !usernameDropdownRef.current.contains(e.target as Node)) {
+        setUsernameDropdownOpen(false);
+      }
+    };
+    if (usernameDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [usernameDropdownOpen]);
 
   const displayName =
     addressForDisplay == null
@@ -146,12 +162,41 @@ export default function Header() {
                 <>
                   {addressForDisplay && (
                     <>
-                      <span
-                        className="rounded bg-bg-elevated px-3 py-1.5 font-mono text-xs text-zinc-300 ring-1 ring-border-subtle"
-                        title={addressForDisplay}
-                      >
-                        {displayName}
-                      </span>
+                      <div className="relative" ref={usernameDropdownRef}>
+                        <button
+                          type="button"
+                          onClick={() => setUsernameDropdownOpen((o) => !o)}
+                          className="rounded bg-bg-elevated px-3 py-1.5 font-mono text-xs text-zinc-300 ring-1 ring-border-subtle hover:bg-bg-card hover:text-accent-cyan transition-colors flex items-center gap-1"
+                          title={addressForDisplay}
+                        >
+                          {displayName}
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${usernameDropdownOpen ? "rotate-180" : ""}`}>
+                            <path d="m6 9 6 6 6-6" />
+                          </svg>
+                        </button>
+                        {usernameDropdownOpen && (
+                          <>
+                            <div className="fixed inset-0 z-40" aria-hidden onClick={() => setUsernameDropdownOpen(false)} />
+                            <div className="absolute right-0 top-full z-50 mt-1 min-w-[180px] rounded-lg border border-border-default bg-bg-card py-1 shadow-xl">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setUsernameDropdownOpen(false);
+                                  setWithdrawModalOpen(true);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white hover:bg-bg-elevated transition-colors"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                  <polyline points="7 10 12 15 17 10" />
+                                  <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                Withdraw to main wallet
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={() => setDepositModalOpen(true)}
@@ -179,6 +224,13 @@ export default function Header() {
         open={depositModalOpen}
         onClose={() => {
           setDepositModalOpen(false);
+          refetchBalance();
+        }}
+      />
+      <WithdrawModal
+        open={withdrawModalOpen}
+        onClose={() => {
+          setWithdrawModalOpen(false);
           refetchBalance();
         }}
       />
